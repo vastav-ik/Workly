@@ -3,6 +3,7 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import http from "http";
 import path from "path";
 import { initSocket } from "./utils/socket";
@@ -19,13 +20,14 @@ import collegeRouter from "./controllers/college.controller";
 const app = express();
 const server = http.createServer(app);
 
-import { rateLimiter } from "./middleware/security.middleware";
+import { apiRateLimiter } from "./middleware/security.middleware";
 
 // ─── Middleware ──────────────────────────────────────────────────
-app.use(cors({ origin: "*" }));
+app.use(helmet());
+app.use(cors({ origin: ["https://campusconnect.in", "exp://localhost:8081", "http://localhost:8081"] }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(rateLimiter(60, 60000)); // 60 requests per minute per IP
+app.use(apiRateLimiter); // 60 requests per minute per IP
 
 // Serve uploaded files statically
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
@@ -63,7 +65,13 @@ async function bootstrap() {
   });
 }
 
-bootstrap().catch((err) => {
-  console.error("❌ Failed to start server:", err);
-  process.exit(1);
-});
+
+
+if (process.env.NODE_ENV !== "test") {
+  bootstrap().catch((err) => {
+    console.error("❌ Failed to start server:", err);
+    process.exit(1);
+  });
+}
+
+export default app;

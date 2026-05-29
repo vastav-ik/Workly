@@ -1,46 +1,35 @@
+import rateLimit from "express-rate-limit";
+import RedisStore from "rate-limit-redis";
+import { createClient } from "redis";
+import { AnyZodObject } from "zod";
 import { Request, Response, NextFunction } from "express";
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+const redisClient = createClient({ url: process.env.REDIS_URL });
+redisClient.connect().catch(console.error);
 
-const store = new Map<string, RateLimitEntry>();
-const DEFAULT_MAX = 60;
-const DEFAULT_WINDOW_MS = 60_000;
+export const apiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({
+    sendCommand: (...args: string[]) => redisClient.sendCommand(args),
+  }),
+});
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (entry.resetAt <= now) store.delete(key);
-  }
-}, 30_000);
-
-export function rateLimiter(maxRequests = DEFAULT_MAX, windowMs = DEFAULT_WINDOW_MS) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const key = req.ip || req.socket.remoteAddress || "unknown";
-    const now = Date.now();
-    const entry = store.get(key);
-
-    if (!entry || entry.resetAt <= now) {
-      store.set(key, { count: 1, resetAt: now + windowMs });
-      res.setHeader("X-RateLimit-Remaining", String(maxRequests - 1));
+export const validate = (schema: AnyZodObject) => 
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await schema.parseAsync({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
       next();
-      return;
+    } catch (error) {
+      res.status(400).json(error);
     }
-
-    entry.count++;
-
-    if (entry.count > maxRequests) {
-      res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
-      res.status(429).json({ error: "Too many requests. Please try again later." });
-      return;
-    }
-
-    res.setHeader("X-RateLimit-Remaining", String(maxRequests - entry.count));
-    next();
-  };
-}
+};
 
 export function sanitizeInput(text: string): string {
   return text

@@ -1,0 +1,21 @@
+{
+  "name": "campusconnect-monorepo",
+  "version": "1.0.0",
+  "description": "CampusConnect: Social and Academic Hub for College Students in India",
+  "private": true,
+  "workspaces": [
+    "apps/server",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "server:dev": "npm run dev --workspace=apps/server",
+    "server:start": "npm run start --workspace=apps/server",
+    "mobile:start": "npm run start --workspace=apps/mobile",
+    "mobile:web": "npm run web --workspace=apps/mobile"
+  },
+  "overrides": {
+    "metro": "0.82.5",
+    "metro-resolver": "0.82.5",
+    "metro-cache": "0.82.5"
+  }
+}

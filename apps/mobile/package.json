@@ -1,0 +1,42 @@
+{
+  "name": "campusconnect-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "ts:check": "tsc"
+  },
+  "dependencies": {
+    "@expo/metro-config": "^56.0.13",
+    "@expo/metro-runtime": "~3.2.3",
+    "@react-navigation/native": "^6.1.17",
+    "@react-navigation/stack": "^6.3.29",
+    "expo": "~51.0.0",
+    "expo-status-bar": "~1.12.1",
+    "lucide-react-native": "^0.379.0",
+    "metro": "^0.76.0",
+    "metro-config": "^0.76.0",
+    "metro-core": "^0.76.0",
+    "metro-resolver": "^0.76.0",
+    "nativewind": "^4.2.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "0.74.1",
+    "react-native-gesture-handler": "~2.16.1",
+    "react-native-reanimated": "~3.10.1",
+    "react-native-safe-area-context": "4.10.1",
+    "react-native-screens": "3.31.1",
+    "react-native-web": "~0.19.10",
+    "react-native-worklets-core": "^1.6.3",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.2.45",
+    "tailwindcss": "^4.3.0",
+    "typescript": "~5.3.3"
+  }
+}

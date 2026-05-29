@@ -1,0 +1,146 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String             @id @default(uuid())
+  name             String
+  email            String             @unique
+  phone            String?            @unique
+  passwordHash     String             // bcrypt hash
+  verified         Boolean            @default(false)
+  verificationType String?            // DOMAIN, ID_CARD, NONE
+  idCardUrl        String?            // Uploaded ID card image URL
+  collegeId        String
+  college          College            @relation(fields: [collegeId], references: [id])
+  stream           String             // e.g. Engineering, Medical
+  branch           String             // e.g. CSE, ECE
+  semester         Int
+  skills           String[]
+  bio              String?
+  avatar           String?
+  portfolioLinks   String[]
+  walletBalance    Float              @default(0.0)
+  isPremium        Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  
+  // Relations
+  posts            Post[]
+  comments         Comment[]
+  documents        Document[]
+  tickets          MatchmakingTicket[]
+  sentMessages     ChatMessage[]      @relation("SentMessages")
+  receivedMessages ChatMessage[]      @relation("ReceivedMessages")
+  consents         ConsentRecord[]
+  
+  @@index([collegeId, branch, semester])
+}
+
+model College {
+  id             String    @id @default(uuid())
+  name           String
+  location       String
+  domain         String    @unique
+  // AISHE official government data fields
+  aisheCode      String?   @unique   // Official AISHE institution code
+  state          String?             // State name from AISHE dataset
+  district       String?             // District name
+  managementType String?             // Private, State Govt, Central Govt, Deemed
+  users          User[]
+  spaces         Space[]
+
+  @@index([name])
+  @@index([state, district])
+}
+
+model Space {
+  id        String    @id @default(uuid())
+  collegeId String
+  college   College   @relation(fields: [collegeId], references: [id])
+  name      String    // e.g. #general, #notes, #pyqs, #placements, #fests
+  category  String    // e.g. "Announcements", "Academic", "Social"
+}
+
+model Post {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    String
+  mediaUrls  String[]
+  tags       String[]
+  likesCount Int       @default(0)
+  createdAt  DateTime  @default(now())
+  comments   Comment[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  description  String
+  fileUrl      String
+  subjectCode  String
+  semester     Int
+  branch       String
+  embeddingsId String?
+  upvotes      Int      @default(0)
+  flags        Int      @default(0)
+  summary      String?  // AI-generated 5-bullet summary
+  createdAt    DateTime @default(now())
+}
+
+model MatchmakingTicket {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectTitle   String
+  description    String
+  requiredSkills String[]
+  lookingFor     String   // e.g. "Frontend Developer", "AI Engineer"
+  status         String   @default("OPEN") // OPEN, CLOSED
+  createdAt      DateTime @default(now())
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  content    String
+  mediaUrl   String?
+  createdAt  DateTime @default(now())
+}
+
+model SemanticCache {
+  id         String   @id @default(uuid())
+  query      String   @unique
+  response   String
+  vectorJson String   // Stringified embedding array for similarity calculations
+  createdAt  DateTime @default(now())
+}
+
+model ConsentRecord {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consentType String   // PROFILE_SHARING, MARKETING, GEOLOCATION, CHAT
+  granted     Boolean  @default(false)
+  timestamp   DateTime @default(now())
+}

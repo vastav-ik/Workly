@@ -1,10 +1,18 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import * as Sentry from "@sentry/react-native";
+import { usePostHog } from "posthog-react-native";
 
 export default function ProfileScreen() {
   const { user, token, logout } = useAuth();
   const [isPremium, setIsPremium] = useState((user as any)?.isPremium || false);
+  const posthog = usePostHog();
+
+  function triggerCrash() {
+    posthog?.capture("test_crash_initiated");
+    throw new Error("Test Sentry Crash");
+  }
 
   async function togglePremium() {
     try {
@@ -94,6 +102,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <TouchableOpacity className="py-3 bg-red-950/50 rounded-xl border border-red-900/50" onPress={deleteAccount}>
           <Text className="text-red-400 text-center font-medium">🗑️ Delete Account & Data</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Developer Tools */}
+      <View className="bg-slate-900 rounded-2xl p-4 mb-4 border border-slate-800">
+        <Text className="text-slate-400 text-xs font-bold uppercase mb-3">🛠️ Developer Options</Text>
+        <TouchableOpacity className="py-3 bg-red-900/80 rounded-xl" onPress={triggerCrash}>
+          <Text className="text-white text-center font-medium">💥 Trigger Test Crash</Text>
         </TouchableOpacity>
       </View>
 

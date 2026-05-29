@@ -3,6 +3,13 @@ import React from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { ThemeProvider, useTheme, resolveModuleFromRoute } from "./src/components/ThemeProvider";
+import * as Sentry from "@sentry/react-native";
+import { PostHogProvider } from "posthog-react-native";
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
+  debug: __DEV__,
+});
 
 import LoginScreen from "./src/screens/LoginScreen";
 import HomeScreen from "./src/screens/HomeScreen";
@@ -84,12 +91,16 @@ function AppNavigator() {
   return user ? <MainTabs /> : <LoginScreen />;
 }
 
-export default function App() {
+function AppRoot() {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <AppNavigator />
-      </ThemeProvider>
-    </AuthProvider>
+    <PostHogProvider apiKey={process.env.EXPO_PUBLIC_POSTHOG_API_KEY || ""} options={{ host: "https://app.posthog.com" }}>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppNavigator />
+        </ThemeProvider>
+      </AuthProvider>
+    </PostHogProvider>
   );
 }
+
+export default Sentry.wrap(AppRoot);

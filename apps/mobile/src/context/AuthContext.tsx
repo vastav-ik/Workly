@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Sentry from "@sentry/react-native";
+import { usePostHog } from "posthog-react-native";
 
 const API_BASE = "http://localhost:5000/api";
 
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const posthog = usePostHog();
 
   useEffect(() => {
     loadStoredAuth();
@@ -56,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (res.ok) {
           const userData = await res.json();
           setUser(userData);
+          Sentry.setUser({ id: userData.id, email: userData.email });
+          posthog?.identify(userData.id, { email: userData.email, name: userData.name });
         } else {
           await AsyncStorage.removeItem("cc_token");
         }
@@ -77,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error(data.error || "Login failed");
     setUser(data.user);
     setToken(data.token);
+    Sentry.setUser({ id: data.user.id, email: data.user.email });
+    posthog?.identify(data.user.id, { email: data.user.email, name: data.user.name });
     await AsyncStorage.setItem("cc_token", data.token);
   }
 
@@ -90,12 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error(data.error || "Registration failed");
     setUser(data.user);
     setToken(data.token);
+    Sentry.setUser({ id: data.user.id, email: data.user.email });
+    posthog?.identify(data.user.id, { email: data.user.email, name: data.user.name });
     await AsyncStorage.setItem("cc_token", data.token);
   }
 
   async function logout() {
     setUser(null);
     setToken(null);
+    Sentry.setUser(null);
+    posthog?.reset();
     await AsyncStorage.removeItem("cc_token");
   }
 

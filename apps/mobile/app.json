@@ -27,10 +27,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro" 
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-localization",
+      "@sentry/react-native/expo"
     ]
   }
 }

@@ -42,3 +42,18 @@ npm install
      ```bash
      npm run mobile:web
      ```
+
+## Deployment & Production
+For cloud deployments (EAS Build), telemetry tools (Sentry & PostHog) are integrated via environment variables.
+
+### Managing Secrets for EAS
+Ensure your `.env` variables are added as secrets before kicking off the first build:
+```bash
+eas secret:create --scope project --name EXPO_PUBLIC_SENTRY_DSN --value "your_sentry_dsn"
+eas secret:create --scope project --name EXPO_PUBLIC_POSTHOG_API_KEY --value "your_posthog_key"
+```
+
+### Building the Release Candidate
+```bash
+eas build --platform all --profile preview
+```

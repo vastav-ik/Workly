@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { useAuth, API_BASE } from "../context/AuthContext";
 import * as Sentry from "@sentry/react-native";
@@ -7,7 +7,46 @@ import { usePostHog } from "posthog-react-native";
 export default function ProfileScreen() {
   const { user, token, logout } = useAuth();
   const [isPremium, setIsPremium] = useState((user as any)?.isPremium || false);
+  const [walletBalance, setWalletBalance] = useState(0);
   const posthog = usePostHog();
+
+  useEffect(() => {
+    fetchWallet();
+  }, []);
+
+  async function fetchWallet() {
+    try {
+      const res = await fetch(`${API_BASE}/billing/wallet`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWalletBalance(data.walletBalance);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch wallet:", err);
+    }
+  }
+
+  async function addFunds(amount: number) {
+    try {
+      const res = await fetch(`${API_BASE}/billing/wallet/add`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWalletBalance(data.walletBalance);
+        Alert.alert("Success", data.message);
+      }
+    } catch {
+      Alert.alert("Error", "Failed to add funds");
+    }
+  }
 
   function triggerCrash() {
     posthog?.capture("test_crash_initiated");
@@ -79,6 +118,29 @@ export default function ProfileScreen() {
         <InfoRow label="Branch" value={user?.branch || "—"} />
         <InfoRow label="Semester" value={String(user?.semester || "—")} />
         <InfoRow label="Verified" value={user?.verified ? "✅ Yes" : "❌ Not yet"} />
+      </View>
+
+      {/* Wallet Card */}
+      <View className="bg-slate-900 rounded-2xl p-4 mb-4 border border-slate-800">
+        <Text className="text-slate-400 text-xs font-bold uppercase mb-2">My Wallet</Text>
+        <View className="flex-row justify-between items-center mb-3">
+          <Text className="text-white text-2xl font-bold">₹{walletBalance}</Text>
+          <Text className="text-slate-500 text-xs">For study notes & marketplace</Text>
+        </View>
+        <View className="flex-row gap-2">
+          <TouchableOpacity
+            className="flex-1 py-2 bg-emerald-600 rounded-xl"
+            onPress={() => addFunds(100)}
+          >
+            <Text className="text-white text-center font-bold">+ Add ₹100</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="flex-1 py-2 bg-emerald-700 rounded-xl"
+            onPress={() => addFunds(500)}
+          >
+            <Text className="text-white text-center font-bold">+ Add ₹500</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Actions */}

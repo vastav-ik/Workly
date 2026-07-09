@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput } from "react-native";
 import { useAuth, API_BASE } from "../context/AuthContext";
 
 interface Post {
@@ -19,6 +19,39 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"global" | "campus">("global");
+
+  // AI Helper state
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState("");
+
+  const askAI = async () => {
+    if (!aiQuestion.trim()) return;
+    setAiLoading(true);
+    setAiAnswer("");
+    try {
+      const res = await fetch(`${API_BASE}/ai/ask`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ question: aiQuestion })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiAnswer(data.answer);
+        setAiSource(data.source);
+      } else {
+        setAiAnswer("Failed to get response from AI assistant.");
+      }
+    } catch {
+      setAiAnswer("Network error trying to contact AI assistant.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -126,6 +159,42 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingVertical: 12 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e1306c" />}
+          ListHeaderComponent={
+            <View className="bg-neutral-800 mx-4 mt-2 mb-3 rounded-card p-4 border border-neutral-700">
+              <Text className="text-content-darkPrimary font-bold text-base mb-2">🤖 AI Academic Helper</Text>
+              <View className="flex-row gap-2 mb-2">
+                <TextInput
+                  className="flex-1 bg-neutral-900 text-content-darkPrimary rounded-input px-3 py-2 text-sm border border-neutral-700"
+                  placeholder="Ask anything about your syllabus..."
+                  placeholderTextColor="#7f8c8d"
+                  value={aiQuestion}
+                  onChangeText={setAiQuestion}
+                />
+                <TouchableOpacity
+                  className="bg-brand-social rounded-lg px-4 py-2 justify-center min-h-[40px]"
+                  onPress={askAI}
+                  disabled={aiLoading}
+                >
+                  {aiLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text className="text-content-darkPrimary font-bold">Ask</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {aiAnswer ? (
+                <View className="bg-neutral-900 rounded-lg p-3 mt-1 border border-neutral-700">
+                  <View className="flex-row justify-between items-center mb-1">
+                    <Text className="text-brand-social text-xs font-bold">Answer</Text>
+                    <Text className="text-content-darkSecondary text-[10px] uppercase">
+                      {aiSource === "cache" ? "⚡ Cached" : "✨ Gemini"}
+                    </Text>
+                  </View>
+                  <Text className="text-content-darkPrimary text-sm leading-5">{aiAnswer}</Text>
+                </View>
+              ) : null}
+            </View>
+          }
           ListEmptyComponent={
             <View className="items-center py-20">
               <Text className="text-4xl mb-3">📝</Text>

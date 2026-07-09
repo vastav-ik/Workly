@@ -25,7 +25,35 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Search user state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
   useEffect(() => { fetchConversations(); }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const delay = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/chat/search-users?q=${searchQuery}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setSearchResults(await res.json());
+        }
+      } catch (err) {
+        console.warn(err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!onDM) return;
@@ -121,33 +149,79 @@ export default function ChatScreen() {
   return (
     <View className="flex-1 bg-neutral-900">
       <View className="px-4 pt-14 pb-4 border-b border-neutral-700">
-        <Text className="text-2xl font-bold text-content-darkPrimary tracking-tight">💬 Chats</Text>
+        <Text className="text-2xl font-bold text-content-darkPrimary tracking-tight mb-2">💬 Chats</Text>
+        <TextInput
+          className="bg-neutral-800 text-content-darkPrimary px-4 py-2 rounded-xl text-sm border border-neutral-700 min-h-[40px]"
+          placeholder="🔍 Search users to chat..."
+          placeholderTextColor="#7f8c8d"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
 
-      <FlatList
-        data={conversations}
-        keyExtractor={(item) => item.partner.id}
-        contentContainerStyle={{ paddingVertical: 8 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity className="flex-row items-center px-4 py-3 border-b border-neutral-800 min-h-[64px]" onPress={() => openChat(item.partner)}>
-            <View className="w-12 h-12 rounded-full bg-brand-academic items-center justify-center mr-3">
-              <Text className="text-content-darkPrimary font-bold text-lg">{item.partner.name[0]}</Text>
+      {searchQuery.trim().length >= 2 ? (
+        <FlatList
+          data={searchResults}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingVertical: 8 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-3 border-b border-neutral-800 min-h-[64px]"
+              onPress={() => {
+                setSearchQuery("");
+                openChat(item);
+              }}
+            >
+              <View className="w-12 h-12 rounded-full bg-brand-academic items-center justify-center mr-3">
+                <Text className="text-content-darkPrimary font-bold text-lg">{item.name[0]}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-content-darkPrimary font-semibold">{item.name}</Text>
+                <Text className="text-content-darkSecondary text-xs mt-1">
+                  {item.branch} {item.college ? `• ${item.college.name}` : ""}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View className="items-center py-20">
+              {searchLoading ? (
+                <ActivityIndicator size="small" color="#7289da" />
+              ) : (
+                <>
+                  <Text className="text-2xl mb-2">🔍</Text>
+                  <Text className="text-content-darkSecondary">No users found</Text>
+                </>
+              )}
             </View>
-            <View className="flex-1">
-              <Text className="text-content-darkPrimary font-semibold">{item.partner.name}</Text>
-              <Text className="text-content-darkSecondary text-sm" numberOfLines={1}>
-                {item.lastMessage.fromMe ? "You: " : ""}{item.lastMessage.content}
-              </Text>
+          }
+        />
+      ) : (
+        <FlatList
+          data={conversations}
+          keyExtractor={(item) => item.partner.id}
+          contentContainerStyle={{ paddingVertical: 8 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity className="flex-row items-center px-4 py-3 border-b border-neutral-800 min-h-[64px]" onPress={() => openChat(item.partner)}>
+              <View className="w-12 h-12 rounded-full bg-brand-academic items-center justify-center mr-3">
+                <Text className="text-content-darkPrimary font-bold text-lg">{item.partner.name[0]}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-content-darkPrimary font-semibold">{item.partner.name}</Text>
+                <Text className="text-content-darkSecondary text-sm" numberOfLines={1}>
+                  {item.lastMessage.fromMe ? "You: " : ""}{item.lastMessage.content}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View className="items-center py-20">
+              <Text className="text-4xl mb-3">💬</Text>
+              <Text className="text-content-darkSecondary">No conversations yet</Text>
             </View>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View className="items-center py-20">
-            <Text className="text-4xl mb-3">💬</Text>
-            <Text className="text-content-darkSecondary">No conversations yet</Text>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </View>
   );
 }

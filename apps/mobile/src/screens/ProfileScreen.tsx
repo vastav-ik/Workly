@@ -114,7 +114,7 @@ export default function ProfileScreen() {
       {/* Info Cards */}
       <View className="bg-slate-900 rounded-2xl p-4 mb-4 border border-slate-800">
         <Text className="text-slate-400 text-xs font-bold uppercase mb-3">Profile Info</Text>
-        <InfoRow label="College" value={user?.college || "—"} />
+        <InfoRow label="College" value={typeof user?.college === "object" ? (user.college as any)?.name : (user?.college || "—")} />
         <InfoRow label="Branch" value={user?.branch || "—"} />
         <InfoRow label="Semester" value={String(user?.semester || "—")} />
         <InfoRow label="Verified" value={user?.verified ? "✅ Yes" : "❌ Not yet"} />

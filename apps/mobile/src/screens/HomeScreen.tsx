@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  TextInput,
+  Modal,
+  Alert,
+  ScrollView,
+} from "react-native";
 import { useAuth, API_BASE } from "../context/AuthContext";
+import FeedCard from "../components/FeedCard";
+import AdBanner from "../components/AdBanner";
 
 interface Post {
   id: string;
@@ -16,6 +29,7 @@ interface Post {
 export default function HomeScreen() {
   const { token, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [ads, setAds] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"global" | "campus">("global");
@@ -26,6 +40,40 @@ export default function HomeScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSource, setAiSource] = useState("");
 
+  // Create Post Modal State
+  const [createPostVisible, setCreatePostVisible] = useState(false);
+  const [newContent, setNewContent] = useState("");
+  const [newTags, setNewTags] = useState("");
+  const [newMediaUrl, setNewMediaUrl] = useState("");
+  const [publishing, setPublishing] = useState(false);
+
+  const fetchPosts = useCallback(async () => {
+    try {
+      const params = tab === "campus" && user ? `?collegeId=${(user as any).collegeId || ""}` : "";
+      // Pass JWT authorization header to enable backend demographic ad targeting
+      const res = await fetch(`${API_BASE}/feed${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(data.posts || []);
+        setAds(data.ads || []);
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [tab, user, token]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchPosts();
+  }, [fetchPosts]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPosts();
+    setRefreshing(false);
+  };
+
   const askAI = async () => {
     if (!aiQuestion.trim()) return;
     setAiLoading(true);
@@ -35,9 +83,9 @@ export default function HomeScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ question: aiQuestion })
+        body: JSON.stringify({ question: aiQuestion }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -53,156 +101,260 @@ export default function HomeScreen() {
     }
   };
 
-  const fetchPosts = useCallback(async () => {
+  const handleCreatePost = async () => {
+    if (!newContent.trim()) {
+      Alert.alert("Error", "Post content cannot be empty.");
+      return;
+    }
+    setPublishing(true);
+
     try {
-      const params = tab === "campus" && user ? `?collegeId=${(user as any).collegeId || ""}` : "";
-      const res = await fetch(`${API_BASE}/feed${params}`);
+      const tagsArray = newTags
+        .split(",")
+        .map((tag) => tag.trim().replace(/^#/, ""))
+        .filter(Boolean);
+
+      const mediaUrlsArray = newMediaUrl.trim() ? [newMediaUrl.trim()] : [];
+
+      const res = await fetch(`${API_BASE}/feed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          content: newContent,
+          tags: tagsArray,
+          mediaUrls: mediaUrlsArray,
+        }),
+      });
+
       if (res.ok) {
-        const data = await res.json();
-        setPosts(data.posts || []);
+        const newPost = await res.json();
+        setPosts((prev) => [newPost, ...prev]);
+        setCreatePostVisible(false);
+        setNewContent("");
+        setNewTags("");
+        setNewMediaUrl("");
+        Alert.alert("Success", "Post created successfully!");
+      } else {
+        const errData = await res.json();
+        Alert.alert("Content Blocked", errData.error || "Failed to publish post.");
       }
-    } catch { /* silent */ }
-    finally { setLoading(false); }
-  }, [tab, user]);
-
-  useEffect(() => { setLoading(true); fetchPosts(); }, [fetchPosts]);
-
-  const onRefresh = async () => { setRefreshing(true); await fetchPosts(); setRefreshing(false); };
-
-  const likePost = async (postId: string) => {
-    try {
-      await fetch(`${API_BASE}/feed/${postId}/like`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likesCount: p.likesCount + 1 } : p));
-    } catch { /* silent */ }
+    } catch {
+      Alert.alert("Error", "Failed to connect to the server.");
+    } finally {
+      setPublishing(false);
+    }
   };
 
-  const timeAgo = (date: string) => {
-    const diff = Date.now() - new Date(date).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    return `${Math.floor(hrs / 24)}d`;
+  // Dynamically inject dynamic demographic ad banners every 4 posts
+  const getFeedItems = () => {
+    const items: any[] = [];
+    posts.forEach((post, index) => {
+      items.push({ type: "post", id: post.id, data: post });
+      if ((index + 1) % 4 === 0 && ads.length > 0) {
+        const adIndex = Math.floor((index + 1) / 4 - 1) % ads.length;
+        items.push({
+          type: "ad",
+          id: `ad-${index}-${ads[adIndex].id}`,
+          data: ads[adIndex],
+        });
+      }
+    });
+    return items;
   };
 
-  const renderPost = ({ item }: { item: Post }) => (
-    <View className="bg-neutral-800 mx-4 mb-3 rounded-card p-4 border border-neutral-700">
-      <View className="flex-row items-center mb-3">
-        <View className="w-10 h-10 rounded-full bg-brand-social items-center justify-center mr-3">
-          <Text className="text-content-darkPrimary font-bold">{item.user.name[0]}</Text>
-        </View>
-        <View className="flex-1">
-          <Text className="text-content-darkPrimary font-semibold">{item.user.name}</Text>
-          <Text className="text-content-darkSecondary text-xs">
-            {item.user.branch} {item.user.college ? `• ${item.user.college.name}` : ""} • {timeAgo(item.createdAt)}
-          </Text>
-        </View>
-      </View>
-
-      <Text className="text-content-darkPrimary mb-3 leading-relaxed">{item.content}</Text>
-
-      {item.tags.length > 0 && (
-        <View className="flex-row flex-wrap gap-1 mb-3">
-          {item.tags.map((tag, i) => (
-            <View key={i} className="bg-brand-social/10 px-2 py-1 rounded-lg">
-              <Text className="text-brand-social text-xs">#{tag}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <View className="flex-row items-center pt-2 border-t border-neutral-700">
-        <TouchableOpacity className="flex-row items-center mr-6 min-h-[48px] justify-center" onPress={() => likePost(item.id)}>
-          <Text className="text-content-darkSecondary mr-1">❤️</Text>
-          <Text className="text-content-darkSecondary">{item.likesCount}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity className="flex-row items-center min-h-[48px] justify-center">
-          <Text className="text-content-darkSecondary mr-1">💬</Text>
-          <Text className="text-content-darkSecondary">{item._count?.comments || 0}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const renderFeedItem = ({ item }: { item: any }) => {
+    if (item.type === "ad") {
+      return <AdBanner ad={item.data} />;
+    }
+    return (
+      <FeedCard
+        item={item.data}
+        onPostDeleted={(postId) => {
+          setPosts((prev) => prev.filter((p) => p.id !== postId));
+        }}
+      />
+    );
+  };
 
   return (
-    <View className="flex-1 bg-neutral-900">
-      <View className="px-4 pt-14 pb-4 bg-neutral-900 border-b border-neutral-700">
-        <Text className="text-2xl font-bold text-content-darkPrimary mb-3 tracking-tight">🎓 CampusConnect</Text>
-        <View className="flex-row bg-neutral-800 rounded-input p-1">
+    <View className="flex-1 bg-slate-950">
+      {/* Screen Header */}
+      <View className="px-4 pt-14 pb-4 bg-slate-950 border-b border-slate-800">
+        <View className="flex-row justify-between items-center mb-3">
+          <Text className="text-2xl font-bold text-white tracking-tight">🎓 CampusConnect</Text>
           <TouchableOpacity
-            className={`flex-1 py-2 rounded-lg min-h-[40px] justify-center ${tab === "global" ? "bg-brand-social" : ""}`}
+            className="w-10 h-10 rounded-full bg-indigo-600 items-center justify-center border border-indigo-500/20"
+            onPress={() => setCreatePostVisible(true)}
+          >
+            <Text className="text-white text-2xl font-bold">+</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Global vs Campus Feed Toggle */}
+        <View className="flex-row bg-slate-900 rounded-xl p-1 border border-slate-800">
+          <TouchableOpacity
+            className={`flex-1 py-2 rounded-lg min-h-[40px] justify-center ${
+              tab === "global" ? "bg-indigo-600" : ""
+            }`}
             onPress={() => setTab("global")}
           >
-            <Text className={`text-center font-medium ${tab === "global" ? "text-content-darkPrimary" : "text-content-darkSecondary"}`}>
-              🌍 Global
+            <Text
+              className={`text-center font-semibold ${
+                tab === "global" ? "text-white" : "text-slate-400"
+              }`}
+            >
+              🌍 Global Feed
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            className={`flex-1 py-2 rounded-lg min-h-[40px] justify-center ${tab === "campus" ? "bg-brand-social" : ""}`}
+            className={`flex-1 py-2 rounded-lg min-h-[40px] justify-center ${
+              tab === "campus" ? "bg-indigo-600" : ""
+            }`}
             onPress={() => setTab("campus")}
           >
-            <Text className={`text-center font-medium ${tab === "campus" ? "text-content-darkPrimary" : "text-content-darkSecondary"}`}>
-              🏫 My Campus
+            <Text
+              className={`text-center font-semibold ${
+                tab === "campus" ? "text-white" : "text-slate-400"
+              }`}
+            >
+              🏫 Campus Feed
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Main feed list */}
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#e1306c" />
+        <View className="flex-1 items-center justify-center bg-slate-950">
+          <ActivityIndicator size="large" color="#6366f1" />
         </View>
       ) : (
         <FlatList
-          data={posts}
-          renderItem={renderPost}
+          data={getFeedItems()}
+          renderItem={renderFeedItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingVertical: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e1306c" />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />
+          }
           ListHeaderComponent={
-            <View className="bg-neutral-800 mx-4 mt-2 mb-3 rounded-card p-4 border border-neutral-700">
-              <Text className="text-content-darkPrimary font-bold text-base mb-2">🤖 AI Academic Helper</Text>
+            <View className="bg-slate-900 mx-4 mt-2 mb-3 rounded-card p-4 border border-slate-800">
+              <Text className="text-white font-bold text-base mb-2">🤖 AI Academic Helper</Text>
               <View className="flex-row gap-2 mb-2">
                 <TextInput
-                  className="flex-1 bg-neutral-900 text-content-darkPrimary rounded-input px-3 py-2 text-sm border border-neutral-700"
+                  className="flex-1 bg-slate-950 text-white rounded-xl px-3 py-2 text-sm border border-slate-800"
                   placeholder="Ask anything about your syllabus..."
                   placeholderTextColor="#7f8c8d"
                   value={aiQuestion}
                   onChangeText={setAiQuestion}
                 />
                 <TouchableOpacity
-                  className="bg-brand-social rounded-lg px-4 py-2 justify-center min-h-[40px]"
+                  className="bg-indigo-600 rounded-lg px-4 py-2 justify-center min-h-[40px]"
                   onPress={askAI}
                   disabled={aiLoading}
                 >
                   {aiLoading ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <Text className="text-content-darkPrimary font-bold">Ask</Text>
+                    <Text className="text-white font-bold">Ask</Text>
                   )}
                 </TouchableOpacity>
               </View>
               {aiAnswer ? (
-                <View className="bg-neutral-900 rounded-lg p-3 mt-1 border border-neutral-700">
+                <View className="bg-slate-950 rounded-lg p-3 mt-1 border border-slate-800">
                   <View className="flex-row justify-between items-center mb-1">
-                    <Text className="text-brand-social text-xs font-bold">Answer</Text>
-                    <Text className="text-content-darkSecondary text-[10px] uppercase">
+                    <Text className="text-indigo-400 text-xs font-bold">Answer</Text>
+                    <Text className="text-slate-500 text-[10px] uppercase">
                       {aiSource === "cache" ? "⚡ Cached" : "✨ Gemini"}
                     </Text>
                   </View>
-                  <Text className="text-content-darkPrimary text-sm leading-5">{aiAnswer}</Text>
+                  <Text className="text-slate-300 text-sm leading-5">{aiAnswer}</Text>
                 </View>
               ) : null}
             </View>
           }
           ListEmptyComponent={
-            <View className="items-center py-20">
+            <View className="items-center py-20 bg-slate-950">
               <Text className="text-4xl mb-3">📝</Text>
-              <Text className="text-content-darkSecondary text-base">No posts yet. Be the first!</Text>
+              <Text className="text-slate-400 text-base">No posts yet. Be the first!</Text>
             </View>
           }
         />
       )}
+
+      {/* Create Post Slide-Up Modal */}
+      <Modal
+        visible={createPostVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setCreatePostVisible(false)}
+      >
+        <View className="flex-1 bg-black/60 justify-end">
+          <View className="bg-slate-900 rounded-t-3xl border-t border-slate-800 h-[80%] overflow-hidden">
+            {/* Header */}
+            <View className="flex-row justify-between items-center p-4 border-b border-slate-800">
+              <Text className="text-white font-bold text-lg">Create Post</Text>
+              <TouchableOpacity
+                onPress={() => setCreatePostVisible(false)}
+                className="p-1 min-h-[40px] justify-center"
+              >
+                <Text className="text-slate-400 font-semibold text-base">Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Form */}
+            <ScrollView contentContainerStyle={{ padding: 16 }}>
+              {/* Content Input */}
+              <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Content</Text>
+              <TextInput
+                className="bg-slate-950 text-white rounded-xl px-4 py-3 min-h-[120px] text-sm border border-slate-800 mb-4"
+                placeholder="What's happening on campus? Type #placements or #internships to auto-tag!"
+                placeholderTextColor="#64748b"
+                multiline
+                textAlignVertical="top"
+                value={newContent}
+                onChangeText={setNewContent}
+              />
+
+              {/* Tags Input */}
+              <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Hashtags (Comma separated)</Text>
+              <TextInput
+                className="bg-slate-950 text-white rounded-xl px-4 py-2.5 text-sm border border-slate-800 mb-4"
+                placeholder="fests, exams, tech"
+                placeholderTextColor="#64748b"
+                value={newTags}
+                onChangeText={setNewTags}
+              />
+
+              {/* Media URL Input (for mock gallery testing) */}
+              <Text className="text-slate-400 text-xs font-bold uppercase mb-2">Attach Mock Image URL</Text>
+              <TextInput
+                className="bg-slate-950 text-white rounded-xl px-4 py-2.5 text-sm border border-slate-800 mb-6"
+                placeholder="https://picsum.photos/600/400"
+                placeholderTextColor="#64748b"
+                value={newMediaUrl}
+                onChangeText={setNewMediaUrl}
+              />
+
+              {/* Submit CTA */}
+              <TouchableOpacity
+                onPress={handleCreatePost}
+                disabled={publishing}
+                className="bg-indigo-600 rounded-xl py-3 justify-center items-center mb-10"
+              >
+                {publishing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text className="text-white font-bold text-base">Publish Post</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

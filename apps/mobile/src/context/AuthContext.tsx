@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Sentry from "@sentry/react-native";
 import { usePostHog } from "posthog-react-native";
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000/api";
 
 interface User {
   id: string;

@@ -109,8 +109,10 @@ router.post(
 // ─── Get Feed (Global + Campus) ──────────────────────────────────
 router.get("/", async (req, res: Response) => {
   try {
-    const { collegeId, page = "1", limit = "20" } = req.query;
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
+    const { collegeId, cursor, limit = "10" } = req.query;
+    const takeVal = parseInt(limit as string);
+    const skipVal = cursor ? 1 : 0;
+    const cursorObj = cursor ? { id: cursor as string } : undefined;
 
     // 1. Optional Auth check to resolve user profile dimensions for ad targeting
     let userProfile = null;
@@ -146,11 +148,13 @@ router.get("/", async (req, res: Response) => {
         _count: { select: { comments: true } },
       },
       orderBy: { createdAt: "desc" },
-      skip,
-      take: parseInt(limit as string),
+      cursor: cursorObj,
+      skip: skipVal,
+      take: takeVal,
     });
 
     const total = await prisma.post.count({ where });
+    const nextCursor = posts.length > 0 ? posts[posts.length - 1].id : null;
 
     // 3. Demographic Ad Filtering
     let targetedAds = MOCK_ADS.filter((ad) => {
@@ -178,10 +182,9 @@ router.get("/", async (req, res: Response) => {
       posts,
       ads: targetedAds,
       pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
+        limit: takeVal,
+        nextCursor,
         total,
-        totalPages: Math.ceil(total / parseInt(limit as string)),
       },
     });
   } catch (error) {

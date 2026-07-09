@@ -30,7 +30,11 @@ export default function ChatScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  useEffect(() => { fetchConversations(); }, []);
+  useEffect(() => {
+    if (!activePartner) {
+      fetchConversations();
+    }
+  }, [activePartner]);
 
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
